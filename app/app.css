@@ -5,6 +5,50 @@
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
+/* MDB Custom Styles */
+.form-outline .form-control,
+.form-outline textarea.form-control {
+  border: none;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0;
+  background-color: transparent;
+  padding-left: 0;
+  padding-right: 0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-outline .form-control:focus ~ .form-label,
+.form-outline .form-control:not(:placeholder-shown) ~ .form-label {
+  color: #FD8200;
+}
+
+.form-outline .form-control:focus {
+  border-bottom-color: #FD8200;
+  box-shadow: none;
+}
+
+.ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Custom Orange Button Styles */
+.btn[style*="background-color: #FD8200"]:hover {
+  background-color: #e67500 !important;
+  border-color: #e67500 !important;
+}
+
+.btn[style*="background-color: #FD8200"]:focus {
+  background-color: #e67500 !important;
+  border-color: #e67500 !important;
+  box-shadow: 0 0 0 0.2rem rgba(253, 130, 0, 0.25) !important;
+}
+
+.btn[style*="background-color: #FD8200"]:active {
+  background-color: #d46900 !important;
+  border-color: #d46900 !important;
+}
+
 html,
 body {
   @apply bg-white dark:bg-gray-950;
