@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Route } from "./+types/solicitar-fotocopias";
+import { buildApiUrl, API_CONFIG } from "../config/api";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -40,7 +41,7 @@ export default function SolicitarFotocopias() {
     const checkBackendConnection = async () => {
       try {
         // Usar el endpoint público de health check
-        const response = await fetch('http://localhost:3000/api/health', {
+        const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.HEALTH), {
           method: 'GET',
           signal: AbortSignal.timeout(5000),
         });
@@ -129,7 +130,7 @@ export default function SolicitarFotocopias() {
   useEffect(() => {
     const fetchLibros = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/libros/public');
+                  const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.LIBROS.PUBLIC));
         if (response.ok) {
           const data = await response.json();
           setLibros(data.data || []);
@@ -338,7 +339,7 @@ export default function SolicitarFotocopias() {
         submitFormData.append('comprobanteFile', files.comprobanteFile.file);
       }
 
-      const response = await fetch('http://localhost:3000/api/solicitudes', {
+      const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SOLICITUDES.BASE), {
         method: 'POST',
         body: submitFormData, // No incluir Content-Type para que el browser maneje multipart/form-data
       });
