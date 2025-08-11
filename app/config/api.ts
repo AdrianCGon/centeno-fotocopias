@@ -1,10 +1,12 @@
+// Configuración de APIs - Cambiar aquí para cambiar el entorno
+const IS_PRODUCTION = false; // Cambiar a true para producción
+
 // Configuración de APIs para desarrollo y producción
 export const API_CONFIG = {
   // URLs base para las APIs
-  // En desarrollo: localhost, en producción: servidor remoto
-  BASE_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'http://localhost:3000' 
-    : 'http://143.198.185.191:3000',
+  BASE_URL: IS_PRODUCTION 
+    ? 'http://143.198.185.191:3000' 
+    : 'http://localhost:3000',
   
   // Endpoints específicos
   ENDPOINTS: {
