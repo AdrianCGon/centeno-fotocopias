@@ -31,7 +31,7 @@ interface FileInfo {
 
 interface AlertState {
   show: boolean;
-  type: 'success' | 'danger';
+  type: 'success' | 'danger' | 'info';
   message: string;
 }
 
@@ -115,16 +115,17 @@ export default function SolicitarFotocopias() {
   const [libros, setLibros] = useState<Array<{id: string, titulo: string, precio: number}>>([]);
   const [librosSeleccionados, setLibrosSeleccionados] = useState<string[]>([]);
 
-  // Recalcular costos automáticamente cuando cambien las páginas
+  // Recalcular costos automáticamente cuando cambien las páginas o los libros
   useEffect(() => {
     const { costoImpresion, costoTotal, montoAbonar } = calculateCosts();
+    console.log('🧮 Recalculando costos:', { costoImpresion, costoTotal, montoAbonar, costoLibros: formData.costoLibros });
     setFormData(prev => ({
       ...prev,
       costoImpresion,
       costoTotal,
       montoAbonar
     }));
-  }, [files.materialImprimir1File.pages, files.materialImprimir2File.pages, files.materialImprimir3File.pages]);
+  }, [files.materialImprimir1File.pages, files.materialImprimir2File.pages, files.materialImprimir3File.pages, formData.costoLibros]);
 
   // Cargar libros disponibles al montar el componente
   useEffect(() => {
@@ -157,7 +158,10 @@ export default function SolicitarFotocopias() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    const finalValue = type === 'number' ? parseFloat(value) || 0 : value;
+    
+    // Para checkboxes, usar 'checked', para otros campos usar 'value'
+    const finalValue = type === 'checkbox' ? (e.target as HTMLInputElement).checked : 
+                      type === 'number' ? parseFloat(value) || 0 : value;
     
     setFormData(prev => {
       const newData = {
@@ -185,6 +189,7 @@ export default function SolicitarFotocopias() {
   };
 
   const handleLibroSelection = (libroId: string, checked: boolean) => {
+    console.log('📚 Seleccionando libro:', { libroId, checked });
     if (checked) {
       setLibrosSeleccionados(prev => [...prev, libroId]);
     } else {
@@ -307,42 +312,134 @@ export default function SolicitarFotocopias() {
     setIsSubmitting(true);
     setAlert({ show: false, type: 'success', message: '' });
 
+    // Validar que el comprobante esté presente
+    if (!files.comprobanteFile.file) {
+      setAlert({
+        show: true,
+        type: 'danger',
+        message: '⚠️ El comprobante de pago es obligatorio para enviar la solicitud.'
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      // Crear FormData para enviar archivos
-      const submitFormData = new FormData();
+      // Verificar si hay archivos para determinar qué ruta usar
+      // NOTA: El comprobante de pago es obligatorio, por lo que siempre habría archivos
+      // Por eso siempre usaríamos la ruta principal con multipart/form-data
+      // 
+      // SOLUCIÓN COMPLETA: Usar la ruta correcta según el contenido
+      // - Si hay archivos de material: ruta principal (multipart)
+      // - Si solo hay comprobante: ruta sin archivos (JSON)
+      // 
+      // ESTO EVITA el error "Unexpected end of form" porque:
+      // 1. Solo enviamos multipart cuando realmente hay archivos de material
+      // 2. Para solo libros usamos JSON (más confiable)
+      // 3. El comprobante se puede enviar por cualquiera de las dos rutas
+      const hasMaterialFiles = files.materialImprimir1File.file || 
+                              files.materialImprimir2File.file || 
+                              files.materialImprimir3File.file;
+
+      console.log('🔍 DEBUG - Estado de archivos:');
+      console.log('  - materialImprimir1File:', !!files.materialImprimir1File.file);
+      console.log('  - materialImprimir2File:', !!files.materialImprimir2File.file);
+      console.log('  - materialImprimir3File:', !!files.materialImprimir3File.file);
+      console.log('  - comprobanteFile:', !!files.comprobanteFile.file);
+      console.log('  - hasMaterialFiles:', hasMaterialFiles);
+
+      let response;
       
-      // Agregar campos del formulario
-      Object.entries(formData).forEach(([key, value]) => {
-        if (key === 'recibirInformacion') {
-          submitFormData.append(key, value.toString());
-        } else {
-          submitFormData.append(key, value.toString());
+      if (hasMaterialFiles) {
+        // Si hay archivos de material, usar la ruta principal con multipart/form-data
+        console.log('📁 Enviando solicitud CON archivos de material (multipart)');
+        
+        setAlert({
+          show: true,
+          type: 'info',
+          message: '📁 Enviando solicitud con archivos de material y libros...'
+        });
+        
+        // Crear FormData para enviar archivos
+        const submitFormData = new FormData();
+        
+        // Agregar campos del formulario
+        Object.entries(formData).forEach(([key, value]) => {
+          if (key === 'recibirInformacion') {
+            submitFormData.append(key, value.toString());
+          } else {
+            submitFormData.append(key, value.toString());
+          }
+        });
+
+        // Debug: Ver qué se está enviando
+        console.log('📋 DEBUG - Datos del formulario a enviar:', formData);
+        console.log('📋 DEBUG - Libros seleccionados:', librosSeleccionados);
+        
+        // Agregar libros seleccionados
+        if (librosSeleccionados.length > 0) {
+          submitFormData.append('librosSeleccionados', JSON.stringify(librosSeleccionados));
         }
-      });
+        
+        // Agregar archivos de material
+        if (files.materialImprimir1File.file) {
+          submitFormData.append('materialImprimir1File', files.materialImprimir1File.file);
+        }
+        if (files.materialImprimir2File.file) {
+          submitFormData.append('materialImprimir2File', files.materialImprimir2File.file);
+        }
+        if (files.materialImprimir3File.file) {
+          submitFormData.append('materialImprimir3File', files.materialImprimir3File.file);
+        }
+        
+        // Agregar comprobante (siempre obligatorio)
+        if (files.comprobanteFile.file) {
+          submitFormData.append('comprobanteFile', files.comprobanteFile.file);
+        }
 
-      // Agregar libros seleccionados
-      if (librosSeleccionados.length > 0) {
-        submitFormData.append('librosSeleccionados', JSON.stringify(librosSeleccionados));
-      }
-      
-      // Agregar archivos
-      if (files.materialImprimir1File.file) {
-        submitFormData.append('materialImprimir1File', files.materialImprimir1File.file);
-      }
-      if (files.materialImprimir2File.file) {
-        submitFormData.append('materialImprimir2File', files.materialImprimir2File.file);
-      }
-      if (files.materialImprimir3File.file) {
-        submitFormData.append('materialImprimir3File', files.materialImprimir3File.file);
-      }
-      if (files.comprobanteFile.file) {
-        submitFormData.append('comprobanteFile', files.comprobanteFile.file);
-      }
+        // Debug: Ver el contenido del FormData
+        console.log('📋 DEBUG - Contenido del FormData:');
+        for (let [key, value] of submitFormData.entries()) {
+          console.log(`  - ${key}:`, value);
+        }
 
-      const response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SOLICITUDES.BASE), {
-        method: 'POST',
-        body: submitFormData, // No incluir Content-Type para que el browser maneje multipart/form-data
-      });
+        // Debug: Verificar que los campos obligatorios estén presentes
+        console.log('🔍 DEBUG - Verificación de campos obligatorios:');
+        console.log('  - nombreApellido presente:', submitFormData.has('nombreApellido'));
+        console.log('  - telefono presente:', submitFormData.has('telefono'));
+        console.log('  - textoNecesario presente:', submitFormData.has('textoNecesario'));
+        console.log('  - comprobanteFile presente:', submitFormData.has('comprobanteFile'));
+
+        response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SOLICITUDES.BASE + '/busboy'), {
+          method: 'POST',
+          body: submitFormData,
+        });
+        console.log('🌐 DEBUG - Enviando a ruta busboy (multipart):', buildApiUrl(API_CONFIG.ENDPOINTS.SOLICITUDES.BASE + '/busboy'));
+      } else {
+        // Si no hay archivos de material, usar la ruta sin archivos con JSON
+        console.log('📚 Enviando solicitud SOLO con libros (JSON)');
+        
+        setAlert({
+          show: true,
+          type: 'info',
+          message: '📚 Enviando solicitud solo con libros...'
+        });
+        
+        const solicitudData = {
+          ...formData,
+          // recibirInformacion ya es un boolean correcto
+          librosSeleccionados: librosSeleccionados.length > 0 ? JSON.stringify(librosSeleccionados) : '[]'
+        };
+
+        response = await fetch(buildApiUrl(API_CONFIG.ENDPOINTS.SOLICITUDES.BASE + '/sin-archivos'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(solicitudData)
+        });
+        
+        console.log('🌐 DEBUG - Enviando a ruta sin archivos (JSON):', buildApiUrl(API_CONFIG.ENDPOINTS.SOLICITUDES.BASE + '/sin-archivos'));
+      }
 
       const result = await response.json();
 
@@ -400,7 +497,7 @@ export default function SolicitarFotocopias() {
             <i className="fas fa-print me-3"></i>
             Centeno Fotocopias
           </h1>
-          <p className="lead mb-0">Solicita tu servicio de fotocopiado e impresión</p>
+          <p className="lead mb-0">Impresiones al costo</p>
         </div>
       </header>
 
@@ -409,13 +506,7 @@ export default function SolicitarFotocopias() {
         <div className="row justify-content-center">
           <div className="col-lg-10">
             {/* Page Title */}
-            <div className="text-center mb-5">
-              <h2 className="display-4 mb-3" style={{color: '#FD8200'}}>Solicitar Fotocopias e Impresión</h2>
-              <p className="lead text-muted">
-                Completa el formulario con los detalles de tu solicitud y te contactaremos 
-                con el presupuesto y tiempo de entrega.
-              </p>
-            </div>
+   
 
             {/* Alert */}
             {alert.show && (
@@ -751,13 +842,17 @@ export default function SolicitarFotocopias() {
                       </h4>
                       <div className="card">
                         <div className="card-body">
-                          <div className="mb-2">
-                            <label className="form-label">Subir Comprobante (PDF, JPG, PNG)</label>
+                          <div className="mb-3">
+                            <label className="form-label">
+                              Subir Comprobante (PDF, JPG, PNG) 
+                              <span className="text-danger ms-1">*</span>
+                            </label>
                             <input
                               type="file"
                               className="form-control"
                               accept=".pdf,.jpg,.jpeg,.png"
                               onChange={(e) => handleFileChange(e, 'comprobanteFile')}
+                              required
                             />
                             {files.comprobanteFile.file && (
                               <div className="mt-2 p-2 bg-success bg-opacity-10 rounded">
@@ -773,7 +868,7 @@ export default function SolicitarFotocopias() {
                             )}
                           </div>
                           <small className="text-muted">
-                            Adjunta el comprobante de transferencia del 50% del total ({formData.montoAbonar > 0 ? `$${formData.montoAbonar.toLocaleString()}` : '$0'})
+                            <span className="text-danger fw-bold">⚠️ OBLIGATORIO:</span> Adjunta el comprobante de transferencia del 50% del total ({formData.montoAbonar > 0 ? `$${formData.montoAbonar.toLocaleString()}` : '$0'}) ALIAS: impresionescenteno25
                           </small>
                         </div>
                       </div>
@@ -783,7 +878,7 @@ export default function SolicitarFotocopias() {
                   
 
                   {/* Resumen de Costos */}
-                  {calculateCosts().totalPages > 0 && (
+                  {(calculateCosts().totalPages > 0 || formData.costoLibros > 0) && (
                     <div className="row">
                       <div className="col-12">
                         <div className="card bg-light" style={{borderColor: '#FD8200'}}>
@@ -796,45 +891,71 @@ export default function SolicitarFotocopias() {
                           <div className="card-body">
                             <div className="row">
                               <div className="col-md-6">
-                                {files.materialImprimir1File.pages && files.materialImprimir1File.pages > 0 && (
-                                  <div className="d-flex justify-content-between mb-2">
-                                    <span>📄 Material 1:</span>
-                                    <span className="fw-bold">{files.materialImprimir1File.pages} páginas</span>
-                                  </div>
+                                {/* Solo mostrar páginas si hay archivos */}
+                                {calculateCosts().totalPages > 0 && (
+                                  <>
+                                    {files.materialImprimir1File.pages && files.materialImprimir1File.pages > 0 && (
+                                      <div className="d-flex justify-content-between mb-2">
+                                        <span>📄 Material 1:</span>
+                                        <span className="fw-bold">{files.materialImprimir1File.pages} páginas</span>
+                                      </div>
+                                    )}
+                                    {files.materialImprimir2File.pages && files.materialImprimir2File.pages > 0 && (
+                                      <div className="d-flex justify-content-between mb-2">
+                                        <span>📄 Material 2:</span>
+                                        <span className="fw-bold">{files.materialImprimir2File.pages} páginas</span>
+                                      </div>
+                                    )}
+                                    {files.materialImprimir3File.pages && files.materialImprimir3File.pages > 0 && (
+                                      <div className="d-flex justify-content-between mb-2">
+                                        <span>📄 Material 3:</span>
+                                        <span className="fw-bold">{files.materialImprimir3File.pages} páginas</span>
+                                      </div>
+                                    )}
+                                    <hr />
+                                    <div className="d-flex justify-content-between mb-2">
+                                      <span className="fw-bold">Total páginas:</span>
+                                      <span className="fw-bold" style={{color: '#FD8200'}}>{calculateCosts().totalPages} páginas</span>
+                                    </div>
+                                  </>
                                 )}
-                                {files.materialImprimir2File.pages && files.materialImprimir2File.pages > 0 && (
-                                  <div className="d-flex justify-content-between mb-2">
-                                    <span>📄 Material 2:</span>
-                                    <span className="fw-bold">{files.materialImprimir2File.pages} páginas</span>
-                                  </div>
+                                
+                                {/* Mostrar libros seleccionados si los hay */}
+                                {librosSeleccionados.length > 0 && (
+                                  <>
+                                    <div className="d-flex justify-content-between mb-2">
+                                      <span>📚 Libros seleccionados:</span>
+                                      <span className="fw-bold">{librosSeleccionados.length} libro(s)</span>
+                                    </div>
+                                    <hr />
+                                  </>
                                 )}
-                                {files.materialImprimir3File.pages && files.materialImprimir3File.pages > 0 && (
-                                  <div className="d-flex justify-content-between mb-2">
-                                    <span>📄 Material 3:</span>
-                                    <span className="fw-bold">{files.materialImprimir3File.pages} páginas</span>
-                                  </div>
-                                )}
-                                <hr />
-                                <div className="d-flex justify-content-between mb-2">
-                                  <span className="fw-bold">Total páginas:</span>
-                                  <span className="fw-bold" style={{color: '#FD8200'}}>{calculateCosts().totalPages} páginas</span>
-                                </div>
                               </div>
                               <div className="col-md-6">
-                                <div className="d-flex justify-content-between mb-2">
-                                  <span>Precio por página:</span>
-                                  <span className="fw-bold">$40</span>
-                                </div>
-                                <div className="d-flex justify-content-between mb-2">
-                                  <span>Costo impresión:</span>
-                                  <span className="fw-bold">${formData.costoImpresion.toLocaleString()}</span>
-                                </div>
+                                {/* Mostrar precio por página solo si hay archivos */}
+                                {calculateCosts().totalPages > 0 && (
+                                  <div className="d-flex justify-content-between mb-2">
+                                    <span>Precio por página:</span>
+                                    <span className="fw-bold">$40</span>
+                                  </div>
+                                )}
+                                
+                                {/* Mostrar costo de impresión solo si hay páginas */}
+                                {formData.costoImpresion > 0 && (
+                                  <div className="d-flex justify-content-between mb-2">
+                                    <span>Costo impresión:</span>
+                                    <span className="fw-bold">${formData.costoImpresion.toLocaleString()}</span>
+                                  </div>
+                                )}
+                                
+                                {/* Mostrar costo de libros si los hay */}
                                 {formData.costoLibros > 0 && (
                                   <div className="d-flex justify-content-between mb-2">
                                     <span>Costo libros:</span>
                                     <span className="fw-bold">${formData.costoLibros.toLocaleString()}</span>
                                   </div>
                                 )}
+                                
                                 <hr />
                                 <div className="d-flex justify-content-between mb-2">
                                   <span className="fw-bold text-success">Total a abonar:</span>

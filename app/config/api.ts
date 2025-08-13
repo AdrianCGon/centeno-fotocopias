@@ -1,5 +1,5 @@
 // Configuración de APIs - Cambiar aquí para cambiar el entorno
-const IS_PRODUCTION = false; // Cambiar a true para producción
+const IS_PRODUCTION = true; // Cambiar a true para producción
 
 // Configuración de APIs para desarrollo y producción
 export const API_CONFIG = {
